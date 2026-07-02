@@ -1,0 +1,17 @@
+# Virtual Environment
+venv/
+
+# Environment Variables
+.env
+**/.env
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Streamlit
+.streamlit/
+
+# VS Code
+.vscode/

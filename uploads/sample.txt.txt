@@ -1,0 +1,16 @@
+Employee Name : Rahul Sharma
+
+Email :
+rahul@gmail.com
+
+Phone :
+9876543210
+
+Personal Email :
+abc@yahoo.com
+
+Aadhaar :
+1234 5678 9123
+
+PAN :
+ABCDE1234F
