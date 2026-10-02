@@ -1,4 +1,4 @@
-# Sensitive-Data-Detection-cOMPLAINCE-Assistant
+# Sensitive-Data-Detection-Compliance-Assistant
 
 A Retrieval-Augmented Generation (RAG) application that answers questions about compliance documents and flags sensitive data. Every answer is grounded in text retrieved from the uploaded files, which reduces hallucinations and lets users check the source.
 
