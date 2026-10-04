@@ -1,17 +1,28 @@
-# Virtual Environment
-venv/
-
-# Environment Variables
+# Environment variables
 .env
 **/.env
 
+# Virtual environments
+venv/
+.venv/
+
 # Python cache
 __pycache__/
-**/__pycache__/
 *.pyc
+*.pyo
+
+# Uploaded documents
+uploads/
+
+# Extracted/generated text
+extracted_text/
+
+# VS Code
+.vscode/
 
 # Streamlit
 .streamlit/
 
-# VS Code
-.vscode/
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,3 +1,27 @@
+"""
+document_manager.py
+
+Responsible for processing uploaded documents.
+
+Workflow
+
+Upload
+    ↓
+Parser
+    ↓
+Cleaner
+    ↓
+Sensitive Data Detection
+    ↓
+Risk Classification
+    ↓
+Compliance Report
+
+NOTE:
+Embeddings and Vector Store are NOT created here.
+They are created lazily when the user asks the first question.
+"""
+
 import os
 
 from modules.parser import DocumentParser
@@ -15,57 +39,74 @@ class DocumentManager:
 
         self.documents = []
 
-    # Save uploaded file
-
     def save_uploaded_file(self, uploaded_file):
 
         os.makedirs("uploads", exist_ok=True)
 
         file_path = os.path.join(
             "uploads",
-            uploaded_file.name
+            uploaded_file.filename
+            if hasattr(uploaded_file, "filename")
+            else uploaded_file.name
         )
 
-        with open(file_path, "wb") as file:
-            file.write(uploaded_file.getbuffer())
+        # FastAPI UploadFile
+        if hasattr(uploaded_file, "file"):
+
+            with open(file_path, "wb") as file:
+
+                file.write(
+                    uploaded_file.file.read()
+                )
+
+        # Streamlit UploadedFile
+        else:
+
+            with open(file_path, "wb") as file:
+
+                file.write(
+                    uploaded_file.getbuffer()
+                )
 
         return file_path
 
-    # Process one document
-
     def process_document(self, uploaded_file):
 
-        # Save file
-        file_path = self.save_uploaded_file(uploaded_file)
+        file_path = self.save_uploaded_file(
+            uploaded_file
+        )
 
-        # Parse
-        raw_text = DocumentParser.parse(file_path)
+        raw_text = DocumentParser.parse(
+            file_path
+        )
 
-        # Clean
-        clean_text = TextCleaner.clean(raw_text)
+        clean_text = TextCleaner.clean(
+            raw_text
+        )
 
-        # Sensitive Data Detection
         detections = SensitiveDataDetector.detect(
             clean_text
         )
 
-        # Risk Classification
         risk = RiskClassifier.classify_document(
             detections
         )
 
-        # Compliance Report
         report = ComplianceGenerator.generate(
             clean_text,
             detections,
             risk
         )
 
-        # Lazy Loading
-        # These will be created only when the chatbot is used.
+        filename = (
+            uploaded_file.filename
+            if hasattr(uploaded_file, "filename")
+            else uploaded_file.name
+        )
+
         document = {
 
-            "filename": uploaded_file.name,
+            "filename": filename,
 
             "text": clean_text,
 
@@ -81,11 +122,11 @@ class DocumentManager:
 
         }
 
-        self.documents.append(document)
+        self.documents.append(
+            document
+        )
 
         return document
-
-    # Process multiple documents
 
     def process_documents(self, uploaded_files):
 
@@ -93,6 +134,8 @@ class DocumentManager:
 
         for uploaded_file in uploaded_files:
 
-            self.process_document(uploaded_file)
+            self.process_document(
+                uploaded_file
+            )
 
         return self.documents
