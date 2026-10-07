@@ -39,30 +39,50 @@ class DocumentManager:
 
         self.documents = []
 
+
+    # =====================================================
+    # SAVE UPLOADED FILE
+    # =====================================================
+
     def save_uploaded_file(self, uploaded_file):
 
-        os.makedirs("uploads", exist_ok=True)
-
-        file_path = os.path.join(
+        os.makedirs(
             "uploads",
+            exist_ok=True
+        )
+
+        filename = (
             uploaded_file.filename
             if hasattr(uploaded_file, "filename")
             else uploaded_file.name
         )
 
+        file_path = os.path.join(
+            "uploads",
+            filename
+        )
+
         # FastAPI UploadFile
+
         if hasattr(uploaded_file, "file"):
 
-            with open(file_path, "wb") as file:
+            with open(
+                file_path,
+                "wb"
+            ) as file:
 
                 file.write(
                     uploaded_file.file.read()
                 )
 
         # Streamlit UploadedFile
+
         else:
 
-            with open(file_path, "wb") as file:
+            with open(
+                file_path,
+                "wb"
+            ) as file:
 
                 file.write(
                     uploaded_file.getbuffer()
@@ -70,27 +90,42 @@ class DocumentManager:
 
         return file_path
 
+
+    # =====================================================
+    # PROCESS SINGLE DOCUMENT
+    # =====================================================
+
     def process_document(self, uploaded_file):
 
         file_path = self.save_uploaded_file(
             uploaded_file
         )
 
+        # Extract text
+
         raw_text = DocumentParser.parse(
             file_path
         )
+
+        # Clean text
 
         clean_text = TextCleaner.clean(
             raw_text
         )
 
+        # Detect sensitive information
+
         detections = SensitiveDataDetector.detect(
             clean_text
         )
 
+        # Calculate risk
+
         risk = RiskClassifier.classify_document(
             detections
         )
+
+        # Generate compliance report
 
         report = ComplianceGenerator.generate(
             clean_text,
@@ -104,9 +139,18 @@ class DocumentManager:
             else uploaded_file.name
         )
 
+        # =================================================
+        # DOCUMENT OBJECT
+        # =================================================
+
         document = {
 
             "filename": filename,
+
+            "source": {
+                "filename": filename,
+                "file_path": file_path
+            },
 
             "text": clean_text,
 
@@ -116,10 +160,11 @@ class DocumentManager:
 
             "report": report,
 
+            # RAG components are created lazily
+
             "chunks": None,
 
             "vector_store": None
-
         }
 
         self.documents.append(
@@ -127,6 +172,11 @@ class DocumentManager:
         )
 
         return document
+
+
+    # =====================================================
+    # PROCESS MULTIPLE DOCUMENTS
+    # =====================================================
 
     def process_documents(self, uploaded_files):
 

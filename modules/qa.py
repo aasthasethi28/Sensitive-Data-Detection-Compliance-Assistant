@@ -8,11 +8,14 @@ Responsibilities:
 - Build document vector stores
 - Detect broad vs specific questions
 - Retrieve relevant document chunks
-- Filter weak retrieval results
+- Combine semantic and lexical relevance
 - Generate grounded answers with Gemini
+- Support single-document and multi-document RAG
+- Return source metadata
 """
 
 import os
+import re
 
 import google.generativeai as genai
 
@@ -31,6 +34,47 @@ genai.configure(
 
 
 class DocumentQA:
+
+    # =====================================================
+    # STOPWORDS
+    # =====================================================
+
+    STOPWORDS = {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "does",
+        "do",
+        "for",
+        "from",
+        "give",
+        "how",
+        "in",
+        "include",
+        "included",
+        "is",
+        "it",
+        "me",
+        "of",
+        "on",
+        "or",
+        "please",
+        "the",
+        "this",
+        "to",
+        "under",
+        "what",
+        "which",
+        "with",
+        "within",
+        "would"
+    }
+
 
     # =====================================================
     # QUERY TYPE DETECTION
@@ -73,6 +117,34 @@ class DocumentQA:
 
 
     # =====================================================
+    # QUERY TOKENIZATION
+    # =====================================================
+
+    @staticmethod
+    def extract_keywords(text):
+
+        words = re.findall(
+            r"\b[a-zA-Z0-9][a-zA-Z0-9_-]*\b",
+            text.lower()
+        )
+
+        keywords = [
+
+            word
+
+            for word in words
+
+            if (
+                len(word) > 1
+                and word not in DocumentQA.STOPWORDS
+            )
+
+        ]
+
+        return set(keywords)
+
+
+    # =====================================================
     # CREATE VECTOR STORE LAZILY
     # =====================================================
 
@@ -104,7 +176,80 @@ class DocumentQA:
 
 
     # =====================================================
-    # RETRIEVE RELEVANT CHUNKS
+    # CALCULATE KEYWORD RELEVANCE
+    # =====================================================
+
+    @staticmethod
+    def calculate_keyword_score(
+        question,
+        chunk
+    ):
+
+        question_keywords = DocumentQA.extract_keywords(
+            question
+        )
+
+        chunk_keywords = DocumentQA.extract_keywords(
+            chunk
+        )
+
+        if not question_keywords:
+
+            return 0.0, False
+
+        matched_keywords = (
+            question_keywords
+            & chunk_keywords
+        )
+
+        keyword_ratio = (
+            len(matched_keywords)
+            / len(question_keywords)
+        )
+
+        # -------------------------------------------------
+        # Exact phrase matching
+        # -------------------------------------------------
+
+        normalized_question = " ".join(
+            question.lower().split()
+        )
+
+        normalized_chunk = " ".join(
+            chunk.lower().split()
+        )
+
+        phrase_match = False
+
+        if len(question_keywords) >= 2:
+
+            ordered_keywords = [
+                word
+                for word in re.findall(
+                    r"\b[a-zA-Z0-9][a-zA-Z0-9_-]*\b",
+                    question.lower()
+                )
+                if (
+                    word not in DocumentQA.STOPWORDS
+                    and len(word) > 1
+                )
+            ]
+
+            if len(ordered_keywords) >= 2:
+
+                phrase = " ".join(
+                    ordered_keywords
+                )
+
+                phrase_match = (
+                    phrase in normalized_chunk
+                )
+
+        return keyword_ratio, phrase_match
+
+
+    # =====================================================
+    # HYBRID RETRIEVAL
     # =====================================================
 
     @staticmethod
@@ -121,9 +266,14 @@ class DocumentQA:
             document["chunks"]
         )
 
-        # -------------------------------------------------
-        # Candidate retrieval
-        # -------------------------------------------------
+        if total_chunks == 0:
+
+            return []
+
+
+        # =================================================
+        # BROAD QUERY
+        # =================================================
 
         if DocumentQA.is_broad_query(
             question
@@ -134,12 +284,22 @@ class DocumentQA:
                 total_chunks
             )
 
-        else:
-
-            candidate_k = min(
-                8,
-                total_chunks
+            results = document["vector_store"].search(
+                query_embedding,
+                k=candidate_k
             )
+
+            return results
+
+
+        # =================================================
+        # SPECIFIC QUERY
+        # =================================================
+
+        candidate_k = min(
+            8,
+            total_chunks
+        )
 
         results = document["vector_store"].search(
             query_embedding,
@@ -150,52 +310,102 @@ class DocumentQA:
 
             return []
 
-        # -------------------------------------------------
-        # Relevance filtering
-        #
-        # FAISS uses L2 distance.
-        # Smaller distance = more similar.
-        #
-        # We use a generous threshold here because
-        # embeddings are document-dependent.
-        # -------------------------------------------------
 
-        if DocumentQA.is_broad_query(
-            question
-        ):
+        # =================================================
+        # HYBRID SCORING
+        # =================================================
 
-            max_distance = 1.30
+        ranked_results = []
 
-        else:
+        for result in results:
 
-            max_distance = 1.00
+            chunk = result["chunk"]
 
-        filtered_results = [
+            distance = result["distance"]
+
+            # -------------------------------------------------
+            # Semantic relevance
+            # -------------------------------------------------
+
+            semantic_score = (
+                1.0
+                / (1.0 + distance)
+            )
+
+            # -------------------------------------------------
+            # Keyword relevance
+            # -------------------------------------------------
+
+            keyword_ratio, phrase_match = (
+                DocumentQA.calculate_keyword_score(
+                    question,
+                    chunk
+                )
+            )
+
+            # -------------------------------------------------
+            # Hybrid score
+            # -------------------------------------------------
+
+            hybrid_score = (
+                0.35 * semantic_score
+                + 0.40 * keyword_ratio
+                + 0.25 * float(phrase_match)
+            )
+
+            ranked_results.append(
+                {
+                    "chunk": chunk,
+                    "distance": distance,
+                    "hybrid_score": hybrid_score,
+                    "keyword_score": keyword_ratio,
+                    "phrase_match": phrase_match
+                }
+            )
+
+
+        # =================================================
+        # SORT BY HYBRID RELEVANCE
+        # =================================================
+
+        ranked_results.sort(
+            key=lambda result: result["hybrid_score"],
+            reverse=True
+        )
+
+
+        # =================================================
+        # SELECT RELEVANT RESULTS
+        # =================================================
+
+        lexical_matches = [
 
             result
 
-            for result in results
+            for result in ranked_results
 
-            if result["distance"] <= max_distance
+            if (
+                result["keyword_score"] > 0
+                or result["phrase_match"]
+            )
 
         ]
 
-        # -------------------------------------------------
-        # Safety fallback
-        #
-        # Never return an empty context merely because
-        # the threshold was slightly too strict.
-        # -------------------------------------------------
 
-        if not filtered_results:
+        if lexical_matches:
 
-            filtered_results = results[:1]
+            selected = lexical_matches[:4]
 
-        return filtered_results
+        else:
+
+            selected = ranked_results[:3]
+
+
+        return selected
 
 
     # =====================================================
-    # ASK QUESTION
+    # ASK QUESTION - SINGLE DOCUMENT
     # =====================================================
 
     @staticmethod
@@ -238,8 +448,27 @@ class DocumentQA:
 
             }
 
+
         # =================================================
-        # BUILD CONTEXT
+        # DOCUMENT SOURCE
+        # =================================================
+
+        source_metadata = document.get(
+            "source",
+            {}
+        )
+
+        filename = source_metadata.get(
+            "filename",
+            document.get(
+                "filename",
+                "Unknown document"
+            )
+        )
+
+
+        # =================================================
+        # BUILD CONTEXT + SOURCES
         # =================================================
 
         context_parts = []
@@ -258,17 +487,29 @@ class DocumentQA:
 
             sources.append(
                 {
+                    "document": filename,
                     "chunk": chunk,
-                    "distance": distance
+                    "distance": distance,
+                    "hybrid_score": result.get(
+                        "hybrid_score"
+                    ),
+                    "keyword_score": result.get(
+                        "keyword_score"
+                    ),
+                    "phrase_match": result.get(
+                        "phrase_match"
+                    )
                 }
             )
+
 
         context = "\n\n".join(
             context_parts
         )
 
+
         # =================================================
-        # PROMPT
+        # SINGLE-DOCUMENT PROMPT
         # =================================================
 
         prompt = f"""
@@ -300,7 +541,37 @@ IMPORTANT RULES:
 7. Do not mention information from unrelated sections
    unless it is necessary to answer the question.
 
-8. Give a clear and professional answer.
+8. Give a moderately detailed answer rather than
+   a very short or one-line response.
+
+9. For a normal factual question, provide approximately
+   3 to 6 clear sentences when the available context
+   supports that level of detail.
+
+10. If the question asks for an explanation, explain
+    the relevant information clearly in a short paragraph
+    or two short paragraphs.
+
+11. If the document contains multiple relevant items,
+    topics, components, or points, use bullet points
+    when this makes the answer easier to understand.
+
+12. Mention the relevant section or topic from the
+    document when it helps clarify the answer.
+
+13. Do not unnecessarily repeat the user's question.
+
+14. Do not make the response excessively long.
+
+15. Every factual statement in the answer must be
+    supported by the provided document context.
+
+16. If only limited information is available in the
+    context, give only that information rather than
+    filling the gaps with outside knowledge.
+
+17. Keep the answer professional, clear, natural,
+    and easy to understand.
 
 =========================================================
 DOCUMENT CONTEXT
@@ -319,6 +590,7 @@ ANSWER
 =========================================================
 """
 
+
         # =================================================
         # GEMINI
         # =================================================
@@ -332,6 +604,269 @@ ANSWER
         )
 
         answer = response.text
+
+
+        # =================================================
+        # RETURN ANSWER + SOURCES
+        # =================================================
+
+        return {
+
+            "answer": answer,
+
+            "sources": sources
+
+        }
+
+
+    # =====================================================
+    # ASK QUESTION - MULTIPLE DOCUMENTS
+    # =====================================================
+
+    @staticmethod
+    def ask_multiple(
+        question,
+        documents
+    ):
+
+        all_results = []
+
+
+        # =================================================
+        # RETRIEVE FROM EACH DOCUMENT
+        # =================================================
+
+        for document in documents:
+
+            DocumentQA.build_vector_store(
+                document
+            )
+
+            results = DocumentQA.retrieve_chunks(
+                question,
+                document
+            )
+
+            source_metadata = document.get(
+                "source",
+                {}
+            )
+
+            filename = source_metadata.get(
+                "filename",
+                document.get(
+                    "filename",
+                    "Unknown document"
+                )
+            )
+
+
+            for result in results:
+
+                all_results.append(
+                    {
+                        "document": filename,
+                        "chunk": result["chunk"],
+                        "distance": result["distance"],
+                        "hybrid_score": result.get(
+                            "hybrid_score"
+                        ),
+                        "keyword_score": result.get(
+                            "keyword_score"
+                        ),
+                        "phrase_match": result.get(
+                            "phrase_match"
+                        )
+                    }
+                )
+
+
+        # =================================================
+        # HANDLE NO RESULTS
+        # =================================================
+
+        if not all_results:
+
+            return {
+
+                "answer": (
+                    "I could not find that information "
+                    "in the uploaded documents."
+                ),
+
+                "sources": []
+
+            }
+
+
+        # =================================================
+        # GLOBAL RANKING
+        # =================================================
+
+        all_results.sort(
+            key=lambda result: result[
+                "hybrid_score"
+            ],
+            reverse=True
+        )
+
+
+        # =================================================
+        # SELECT TOP RESULTS
+        # =================================================
+
+        selected_results = all_results[:8]
+
+
+        # =================================================
+        # BUILD MULTI-DOCUMENT CONTEXT
+        # =================================================
+
+        context_parts = []
+
+        for result in selected_results:
+
+            context_parts.append(
+                f"""
+DOCUMENT: {result["document"]}
+
+CONTENT:
+{result["chunk"]}
+"""
+            )
+
+
+        context = "\n\n".join(
+            context_parts
+        )
+
+
+        # =================================================
+        # BUILD SOURCES
+        # =================================================
+
+        sources = []
+
+        for result in selected_results:
+
+            sources.append(
+                {
+                    "document": result["document"],
+                    "chunk": result["chunk"],
+                    "distance": result["distance"],
+                    "hybrid_score": result[
+                        "hybrid_score"
+                    ],
+                    "keyword_score": result[
+                        "keyword_score"
+                    ],
+                    "phrase_match": result[
+                        "phrase_match"
+                    ]
+                }
+            )
+
+
+        # =================================================
+        # MULTI-DOCUMENT GEMINI PROMPT
+        # =================================================
+
+        prompt = f"""
+You are an Enterprise AI Compliance Assistant.
+
+Answer the user's question using ONLY the information
+contained in the provided document context.
+
+The context may contain information from multiple
+uploaded documents.
+
+IMPORTANT RULES:
+
+1. Use only information supported by the provided
+   documents.
+
+2. Do not use outside knowledge.
+
+3. Do not invent information.
+
+4. Do not assume that information exists in a document
+   if it is not present in the supplied context.
+
+5. Clearly distinguish information coming from different
+   documents when necessary.
+
+6. When useful, mention the document name from which
+   the information was obtained.
+
+7. If multiple documents provide relevant information,
+   synthesize the information into one clear answer.
+
+8. If the documents contain different or conflicting
+   information, clearly identify the difference and
+   mention the relevant document names.
+
+9. Give a moderately detailed answer rather than a
+   one-line response.
+
+10. For a normal factual question, provide approximately
+    3 to 6 clear sentences when the available context
+    supports that level of detail.
+
+11. If the question requires explanation, provide one
+    or two short paragraphs with enough detail to make
+    the answer understandable.
+
+12. If multiple points are relevant, use bullet points
+    when that improves readability.
+
+13. Do not unnecessarily repeat the user's question.
+
+14. Do not make the response excessively long.
+
+15. Every factual statement must be supported by the
+    supplied document context.
+
+16. If only limited information is available, provide
+    only that information instead of filling gaps with
+    outside knowledge.
+
+17. If the requested information cannot be found in
+    the supplied document context, respond exactly:
+
+I could not find that information in the uploaded documents.
+
+=========================================================
+USER QUESTION
+=========================================================
+
+{question}
+
+=========================================================
+DOCUMENT CONTEXT
+=========================================================
+
+{context}
+
+=========================================================
+ANSWER
+=========================================================
+"""
+
+
+        # =================================================
+        # GEMINI
+        # =================================================
+
+        model = genai.GenerativeModel(
+            "gemini-2.5-flash"
+        )
+
+        response = model.generate_content(
+            prompt
+        )
+
+        answer = response.text
+
 
         # =================================================
         # RETURN ANSWER + SOURCES
