@@ -124,7 +124,7 @@ The detector is pattern/rule based in the current implementation. Numeric patter
 
 The local application is designed to run on the developer's machine.
 
-\`\`\`text
+```text
                     LOCAL DEVELOPMENT
 
                  User / Swagger UI
@@ -171,24 +171,24 @@ The local application is designed to run on the developer's machine.
           +--------------+--------------+
                          |
                   Local uploads/
-\`\`\`
+```
 
 ## Local AI provider
 
 - Runtime: Ollama.
-- Model currently used: \`qwen3.5:4b\`.
-- Ollama host: \`http://127.0.0.1:11434\`.
-- Python integration module: \`modules/llm.py\`.
-- HTTP client: \`httpx\`.
-- Local configuration is read from environment variables using \`python-dotenv\`.
+- Model currently used: `qwen3.5:4b`.
+- Ollama host: `http://127.0.0.1:11434`.
+- Python integration module: `modules/llm.py`.
+- HTTP client: `httpx`.
+- Local configuration is read from environment variables using `python-dotenv`.
 
 The local model was installed and tested successfully. The local application should retain this option even after a cloud provider is introduced.
 
 ## Local embeddings and vector storage
 
-- Embedding model: \`BAAI/bge-small-en-v1.5\`.
+- Embedding model: `BAAI/bge-small-en-v1.5`.
 - Library: Sentence Transformers.
-- Vector store: FAISS \`IndexFlatL2\`.
+- Vector store: FAISS `IndexFlatL2`.
 - Chunking: custom structure-aware chunker.
 - Retrieval: semantic similarity combined with keyword and phrase relevance.
 
@@ -198,9 +198,9 @@ The local vector store is not a hosted vector database. FAISS indexes are stored
 
 The latest local implementation uses:
 
-- SQLite database: \`storage/documents.db\`.
-- Persisted FAISS indexes: \`storage/faiss_indexes/\`.
-- Original uploaded files: \`uploads/\`.
+- SQLite database: `storage/documents.db`.
+- Persisted FAISS indexes: `storage/faiss_indexes/`.
+- Original uploaded files: `uploads/`.
 - Local in-memory cache: used at runtime and restored from persisted records during startup.
 
 The application startup lifecycle initializes storage and restores documents. Uploaded document IDs can be reused after a restart when the corresponding saved records and indexes are available.
@@ -209,21 +209,21 @@ Local persistence is not the same as a multi-user cloud storage system. It does 
 
 ## Local LLM configuration
 
-A local \`.env\` file can contain:
+A local `.env` file can contain:
 
-\`\`\`env
+```env
 OLLAMA_HOST=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen3.5:4b
 OLLAMA_TIMEOUT=180
-\`\`\`
+```
 
-Do not commit the actual \`.env\` file.
+Do not commit the actual `.env` file.
 
 ## Running locally
 
 From Windows PowerShell, in the project directory:
 
-\`\`\`powershell
+```powershell
 # Activate the existing virtual environment
 .\\venv\\Scripts\\Activate.ps1
 
@@ -232,15 +232,15 @@ ollama serve
 
 # Run the FastAPI application
 uvicorn main:app --reload
-\`\`\`
+```
 
 API URLs:
 
-- API root: \`http://127.0.0.1:8000/\`
-- Health endpoint: \`http://127.0.0.1:8000/health\`
-- Swagger documentation: \`http://127.0.0.1:8000/docs\`
+- API root: `http://127.0.0.1:8000/`
+- Health endpoint: `http://127.0.0.1:8000/health`
+- Swagger documentation: `http://127.0.0.1:8000/docs`
 
-Use the current local \`requirements.txt\` from the working copy. The requirements file on GitHub was found to be older and still contains legacy Gemini and LangChain dependencies; it must be reconciled with the actual local code before deployment.
+Use the current local `requirements.txt` from the working copy. The requirements file on GitHub was found to be older and still contains legacy Gemini and LangChain dependencies; it must be reconciled with the actual local code before deployment.
 
 ---
 
@@ -300,7 +300,7 @@ The system should communicate when the requested information cannot be found in 
 
 # Current RAG Design
 
-\`\`\`text
+```text
                 User question
                       |
                       v
@@ -329,7 +329,7 @@ The system should communicate when the requested information cannot be found in 
                       |
                       v
              Source chunk references
-\`\`\`
+```
 
 ## Structure-aware chunking
 
@@ -376,14 +376,14 @@ The planned public portfolio demonstration will use the following services, subj
 | Frontend | Vercel Hobby | React interface |
 | API backend | Vercel Hobby / Python Function | FastAPI routes and orchestration |
 | LLM generation | Gemini API free tier | Compliance report and RAG answers |
-| Cloud embeddings | \`gemini-embedding-001\` | Embed document chunks and user questions |
+| Cloud embeddings | `gemini-embedding-001` | Embed document chunks and user questions |
 | Vector database | Qdrant Cloud Free | Dedicated vector storage and retrieval |
 | Relational database | Supabase PostgreSQL | Users, document metadata, risk and report records |
 | File storage | Supabase Storage | Original uploaded documents |
 
 **Qdrant remains the dedicated vector database.** Supabase PostgreSQL stores relational data; it is not being selected as a replacement for Qdrant. We are not planning to use pgvector for this design.
 
-\`\`\`text
+```text
                          CLOUD DEMO
 
                         User / Browser
@@ -412,7 +412,7 @@ The planned public portfolio demonstration will use the following services, subj
           |
           +-- LLM generation
           +-- Text embeddings
-\`\`\`
+```
 
 ## Responsibilities by service
 
@@ -439,7 +439,7 @@ Planned responsibilities:
 
 The model selected for text generation must be checked in Google AI Studio immediately before implementation because free-tier model availability, quotas, and rate limits can change.
 
-The planned embedding model is \`gemini-embedding-001\`. Its requested output dimension must be fixed and used consistently for every vector in the corresponding Qdrant collection.
+The planned embedding model is `gemini-embedding-001`. Its requested output dimension must be fixed and used consistently for every vector in the corresponding Qdrant collection.
 
 **Privacy restriction:** Google's Gemini API free tier states that submitted content may be used to improve its products. Do not send genuine confidential business documents, real personal data, customer records, credentials, or other sensitive documents through the unpaid API. Use synthetic or properly anonymised sample documents for the public demo.
 
@@ -514,7 +514,7 @@ The target cloud workflow is:
 5. **Parsing and cleaning** — reuse the existing parser and cleaner.
 6. **Sensitive-data detection** — reuse the detector, subject to the privacy restrictions of the selected AI and hosting services.
 7. **Risk classification** — reuse the weighted classifier.
-8. **Chunking** — reuse the structure-aware \`TextChunker\`.
+8. **Chunking** — reuse the structure-aware `TextChunker`.
 9. **Embedding generation** — use the cloud embedding provider in cloud mode.
 10. **Vector insertion** — store vectors and metadata in Qdrant.
 11. **Compliance report generation** — call Gemini and save the report and summary in Supabase PostgreSQL.
@@ -547,9 +547,9 @@ Before changing code:
 - Back up the working project.
 - Confirm the local Git branch and working tree.
 - Confirm the GitHub remote.
-- Compare local code against the current GitHub \`main\` branch.
-- Update \`.gitignore\` before staging any files.
-- Never stage \`.env\`, uploaded documents, local databases, FAISS indexes, model caches, or virtual environments.
+- Compare local code against the current GitHub `main` branch.
+- Update `.gitignore` before staging any files.
+- Never stage `.env`, uploaded documents, local databases, FAISS indexes, model caches, or virtual environments.
 - Commit the latest tested local source files in a separate source-code commit.
 
 This step matters because the GitHub branch was found to contain an older implementation than the latest local working copy.
@@ -558,13 +558,13 @@ This step matters because the GitHub branch was found to contain an older implem
 
 Primary file:
 
-- \`modules/llm.py\`
+- `modules/llm.py`
 
 Goal: support both local Ollama and cloud Gemini through one stable interface.
 
 Expected configuration concept:
 
-\`\`\`env
+```env
 LLM_PROVIDER=ollama
 
 OLLAMA_HOST=http://127.0.0.1:11434
@@ -574,7 +574,7 @@ OLLAMA_TIMEOUT=180
 # Used only when LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_key_here
 GEMINI_MODEL=select_a_model_available_on_the_free_tier
-\`\`\`
+```
 
 Implementation requirements:
 
@@ -591,17 +591,17 @@ Implementation requirements:
 
 Primary file:
 
-- \`modules/embeddings.py\`
+- `modules/embeddings.py`
 
 Goal: support both local BGE embeddings and cloud Gemini embeddings.
 
 Local provider:
 
-- \`BAAI/bge-small-en-v1.5\` through Sentence Transformers.
+- `BAAI/bge-small-en-v1.5` through Sentence Transformers.
 
 Cloud provider:
 
-- \`gemini-embedding-001\`.
+- `gemini-embedding-001`.
 
 Implementation requirements:
 
@@ -620,18 +620,18 @@ Implementation requirements:
 
 Primary file:
 
-- \`modules/vector_store.py\`
+- `modules/vector_store.py`
 
 Goal: retain FAISS for local mode and add Qdrant for cloud mode.
 
 Configuration concept:
 
-\`\`\`env
+```env
 VECTOR_STORE_PROVIDER=faiss
 QDRANT_URL=https://your-cluster-url
 QDRANT_API_KEY=your_qdrant_api_key
 QDRANT_COLLECTION=enterprise_compliance_gemini_768
-\`\`\`
+```
 
 Implementation requirements:
 
@@ -658,38 +658,38 @@ Create the Supabase project and configure:
 
 Suggested relational tables (final schema to be designed before creating them):
 
-### \`documents\`
+### `documents`
 
-- \`id\`
-- \`user_id\`
-- \`filename\`
-- \`storage_path\`
-- \`mime_type\`
-- \`file_size\`
-- \`status\`
-- \`risk_level\`
-- \`risk_score\`
-- \`created_at\`
-- \`updated_at\`
+- `id`
+- `user_id`
+- `filename`
+- `storage_path`
+- `mime_type`
+- `file_size`
+- `status`
+- `risk_level`
+- `risk_score`
+- `created_at`
+- `updated_at`
 
-### \`detection_results\`
+### `detection_results`
 
-- \`id\`
-- \`document_id\`
-- \`user_id\`
-- \`category\`
-- \`count\`
-- \`severity\`
-- \`details\` (only the minimum necessary; avoid storing raw sensitive values)
+- `id`
+- `document_id`
+- `user_id`
+- `category`
+- `count`
+- `severity`
+- `details` (only the minimum necessary; avoid storing raw sensitive values)
 
-### \`compliance_reports\`
+### `compliance_reports`
 
-- \`id\`
-- \`document_id\`
-- \`user_id\`
-- \`report_text\`
-- \`created_at\`
-- \`model_name\`
+- `id`
+- `document_id`
+- `user_id`
+- `report_text`
+- `created_at`
+- `model_name`
 
 The schema can be adjusted based on the existing response shapes and detector output.
 
@@ -706,15 +706,15 @@ Security requirements:
 
 Relevant modules:
 
-- \`modules/document_manager.py\`
-- \`main.py\`
+- `modules/document_manager.py`
+- `main.py`
 - A new Supabase/storage adapter module may be introduced.
 - The existing SQLite/FAISS persistence code remains for local mode.
 
 Cloud mode must not depend on:
 
 - A local SQLite database surviving between serverless requests.
-- Local \`uploads/\` files surviving a redeployment.
+- Local `uploads/` files surviving a redeployment.
 - Local FAISS index files.
 - An in-memory Python dictionary being shared by all requests.
 
@@ -780,7 +780,7 @@ Keep provider selection explicit. The local and cloud environment variables shou
 
 ## Local mode
 
-\`\`\`env
+```env
 LLM_PROVIDER=ollama
 VECTOR_STORE_PROVIDER=faiss
 EMBEDDING_PROVIDER=sentence_transformers
@@ -788,11 +788,11 @@ EMBEDDING_PROVIDER=sentence_transformers
 OLLAMA_HOST=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen3.5:4b
 OLLAMA_TIMEOUT=180
-\`\`\`
+```
 
 ## Cloud demo mode
 
-\`\`\`env
+```env
 LLM_PROVIDER=gemini
 VECTOR_STORE_PROVIDER=qdrant
 EMBEDDING_PROVIDER=gemini
@@ -807,7 +807,7 @@ SUPABASE_URL=...
 SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 SUPABASE_STORAGE_BUCKET=documents
-\`\`\`
+```
 
 This is a configuration template only. Use the exact environment variable names that the implementation eventually adopts. Store the service-role key only in the backend's protected environment. The browser may use a public/anon key only with correctly configured RLS and access policies.
 
@@ -839,7 +839,7 @@ Important implementation consequences:
 - Use Gemini API for cloud embeddings.
 - Send files directly from the browser to Supabase Storage using signed uploads rather than posting large files through a Vercel Function.
 - Vercel Function request/response payload limits and the Python deployment bundle limit must be respected.
-- Keep the cloud dependency list small. Consider a separate \`requirements-cloud.txt\` so local-only packages are not installed in the cloud function.
+- Keep the cloud dependency list small. Consider a separate `requirements-cloud.txt` so local-only packages are not installed in the cloud function.
 - Test parser dependencies and deployment bundle size before committing to Vercel as the backend host.
 
 ## Gemini free-tier constraints
@@ -879,7 +879,7 @@ This project analyses sensitive-data patterns, so privacy and access control are
 
 For the local version:
 
-- Keep \`.env\` outside Git.
+- Keep `.env` outside Git.
 - Keep uploaded files and local databases outside Git.
 - Do not publish real documents in screenshots, test fixtures, or issue reports.
 - Restrict access to the machine and local project folder.
@@ -906,16 +906,16 @@ The free cloud design is for a demonstration with non-sensitive sample documents
 
 **This note is important before continuing.**
 
-On 31 October 2026, the GitHub \`main\` branch was inspected. The remote source snapshot still showed the older implementation:
+On 31 October 2026, the GitHub `main` branch was inspected. The remote source snapshot still showed the older implementation:
 
-- \`main.py\` used an in-memory \`document_store = {}\`.
+- `main.py` used an in-memory `document_store = {}`.
 - The remote README described Gemini + BGE + FAISS.
-- The remote \`requirements.txt\` still listed legacy \`google-generativeai\` and LangChain dependencies.
-- The remote tree did not yet show the newer local \`modules/llm.py\` and storage/persistence files described in the current local development notes.
+- The remote `requirements.txt` still listed legacy `google-generativeai` and LangChain dependencies.
+- The remote tree did not yet show the newer local `modules/llm.py` and storage/persistence files described in the current local development notes.
 
 The latest local working copy discussed in development is newer:
 
-- Ollama + Qwen integration through \`modules/llm.py\`.
+- Ollama + Qwen integration through `modules/llm.py`.
 - Qwen used by compliance generation and RAG.
 - SQLite persistence and saved FAISS indexes.
 - Document restoration on application startup.
@@ -942,28 +942,28 @@ Open the existing project directory in VS Code and activate its current virtual 
 
 Windows PowerShell:
 
-\`\`\`powershell
+```powershell
 cd "C:\\Users\\COER UNIVERSITY\\Desktop\\Sensitive Data Detection & Compliance Assistant"
 .\\venv\\Scripts\\Activate.ps1
-\`\`\`
+```
 
 If the project directory has moved, use its actual current location.
 
 ## Step 2 — Inspect Git status before committing
 
-\`\`\`powershell
+```powershell
 git status
 git branch --show-current
 git remote -v
-\`\`\`
+```
 
 Check which source files are modified and confirm the active branch.
 
 ## Step 3 — Protect local and sensitive files
 
-Before staging files, check \`.gitignore\`. It should exclude at least:
+Before staging files, check `.gitignore`. It should exclude at least:
 
-\`\`\`gitignore
+```gitignore
 .env
 **/.env
 venv/
@@ -980,38 +980,38 @@ extracted_text/
 .vscode/
 .DS_Store
 Thumbs.db
-\`\`\`
+```
 
 Do not commit:
 
-- \`.env\` or API keys.
+- `.env` or API keys.
 - Uploaded source documents.
-- \`storage/documents.db\`.
-- \`storage/faiss_indexes/\`.
+- `storage/documents.db`.
+- `storage/faiss_indexes/`.
 - Virtual environments.
 - Downloaded model weights and caches.
 - Any real sensitive test data.
 
-Check the staged files with \`git status\` before committing.
+Check the staged files with `git status` before committing.
 
 ## Step 4 — Synchronise the tested local implementation to GitHub
 
 The remote branch is older than the latest local code. Review the actual local changes first. Stage only the intended source/configuration files, for example:
 
-\`\`\`powershell
+```powershell
 git add main.py modules requirements.txt .gitignore
 git status
-\`\`\`
+```
 
-The exact staging list depends on the local changes and any new files. Do not use \`git add .\` blindly.
+The exact staging list depends on the local changes and any new files. Do not use `git add .` blindly.
 
 After verifying the staged diff:
 
-\`\`\`powershell
+```powershell
 git diff --cached
 git commit -m "Sync local Qwen and persistent RAG implementation"
 git push origin main
-\`\`\`
+```
 
 If Git reports a rejected push or remote changes, stop and reconcile the branch safely; do not force-push.
 
@@ -1019,25 +1019,25 @@ If Git reports a rejected push or remote changes, stop and reconcile the branch 
 
 Run the checks appropriate to the current implementation:
 
-\`\`\`powershell
+```powershell
 pip check
 python -c "from modules.llm import LocalLLM; print(LocalLLM.generate('Reply with LOCAL MODEL READY'))"
 python -c "import main; print('FastAPI application loaded successfully')"
-\`\`\`
+```
 
 Then start the server:
 
-\`\`\`powershell
+```powershell
 uvicorn main:app --reload
-\`\`\`
+```
 
-Use Swagger at \`http://127.0.0.1:8000/docs\` and confirm upload, document listing, single-document chat, and multi-document chat. Do not assume a test passed until its output confirms it.
+Use Swagger at `http://127.0.0.1:8000/docs` and confirm upload, document listing, single-document chat, and multi-document chat. Do not assume a test passed until its output confirms it.
 
 ## Step 6 — Start Phase 1 of the cloud migration
 
 Only after the local source is safely backed up and synchronised:
 
-1. Open \`modules/llm.py\`.
+1. Open `modules/llm.py`.
 2. Preserve the working Ollama provider.
 3. Add Gemini as a second provider behind a configuration setting.
 4. Test Ollama mode again.
@@ -1053,7 +1053,7 @@ Only after the local source is safely backed up and synchronised:
 
 This is a possible future structure, not a statement that all these files already exist.
 
-\`\`\`text
+```text
 enterprise-ai-compliance-assistant/
 |
 |-- main.py
@@ -1103,7 +1103,7 @@ enterprise-ai-compliance-assistant/
 |
 |-- uploads/       # local only; ignored by Git
 |-- storage/       # local only; ignored by Git
-\`\`\`
+```
 
 The cloud deployment should use a small dependency set. Local-only packages such as Ollama-related local dependencies, Sentence Transformers, PyTorch, and FAISS should not be loaded in the Vercel cloud execution path unless they are explicitly required and proven to fit the deployment constraints.
 
@@ -1170,7 +1170,7 @@ Review current pricing and provider limits before deployment:
 
 Continue the project one component at a time:
 
-\`\`\`text
+```text
 Preserve local implementation
            |
            v
@@ -1199,6 +1199,6 @@ React frontend
            |
            v
 Vercel deployment and end-to-end testing
-\`\`\`
+```
 
-**Immediate next task:** synchronise the latest local Qwen + persistent-storage source files to GitHub, then implement and test the provider switch in \`modules/llm.py\`. Keep Ollama working locally throughout the migration.
+**Immediate next task:** synchronise the latest local Qwen + persistent-storage source files to GitHub, then implement and test the provider switch in `modules/llm.py`. Keep Ollama working locally throughout the migration.
