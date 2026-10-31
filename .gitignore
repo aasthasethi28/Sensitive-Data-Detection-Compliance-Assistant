@@ -26,3 +26,13 @@ extracted_text/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local persistence and databases
+storage/
+*.db
+*.sqlite
+*.sqlite3
+
+# Model and test caches
+.cache/
+.pytest_cache/
