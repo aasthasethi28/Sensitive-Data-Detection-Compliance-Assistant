@@ -1,32 +1,31 @@
+
 """
-Generates an AI Compliance Report using Google Gemini.
+compliance.py
+
+Generates AI-powered compliance reports using
+a locally running Ollama model.
 """
 
-import os
-import google.generativeai as genai
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
-genai.configure(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+from modules.llm import LocalLLM
 
 
 class ComplianceGenerator:
 
     """
-    Generates a professional compliance report
-    for uploaded documents.
+    Generates professional compliance reports
+    for uploaded documents using a local LLM.
     """
 
-    model = genai.GenerativeModel(
-        "gemini-2.5-flash"
-    )
+    # =====================================================
+    # GENERATE COMPLIANCE REPORT
+    # =====================================================
 
     @staticmethod
-    def generate(document, detection, risk):
+    def generate(
+        document,
+        detection,
+        risk
+    ):
 
         prompt = f"""
 You are an Enterprise Cybersecurity Compliance Officer and Data Privacy Auditor.
@@ -86,6 +85,9 @@ State the overall risk level:
 
 Explain WHY this risk level was assigned.
 
+Use the supplied risk classification as the authoritative risk level.
+Do not independently invent or change the calculated risk score.
+
 ---
 
 # 🔍 Sensitive Information Detected
@@ -116,6 +118,8 @@ Examples:
 
 • Business Confidential Information
 
+If no sensitive information was detected, explicitly state that.
+
 ---
 
 # 📚 Applicable Compliance Standards
@@ -135,6 +139,8 @@ Possible standards include:
 • HIPAA
 
 Briefly explain why each applies.
+
+Do not claim that a regulation applies merely because it appears in this list.
 
 ---
 
@@ -157,6 +163,8 @@ Examples:
 • Data Breach
 
 • Regulatory Penalties
+
+Distinguish actual detected risks from hypothetical risks.
 
 ---
 
@@ -184,6 +192,8 @@ Examples:
 
 • Apply document classification labels.
 
+Make recommendations relevant to the actual document findings.
+
 ---
 
 # 🏁 Final Verdict
@@ -191,15 +201,31 @@ Examples:
 Give a final conclusion in 3–4 sentences explaining whether the document is safe to share publicly and what precautions should be taken.
 
 Use professional markdown formatting with headings and bullet points.
+
+STRICT RULES:
+
+1. Base the report on the supplied document, detections and risk classification.
+2. Do not invent sensitive information or detection results.
+3. Do not change the supplied risk level.
+4. Distinguish detected facts from general recommendations.
+5. If information is unavailable, state that it was not established.
 """
+
+
+        # =================================================
+        # LOCAL LLM GENERATION
+        # =================================================
 
         try:
 
-            response = ComplianceGenerator.model.generate_content(
-                prompt
+            report = LocalLLM.generate(
+                prompt,
+                temperature=0.2,
+                num_ctx=8192
             )
 
-            return response.text
+            return report
+
 
         except Exception as e:
 
@@ -212,7 +238,11 @@ Error:
 
 Please verify:
 
-- Gemini API Key
-- Internet Connection
-- API Quota
+- Ollama is running.
+- The configured local model is installed.
+- The model name in the .env file is correct.
+- The local Ollama API is accessible.
+- Sufficient system memory is available.
 """
+
+

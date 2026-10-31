@@ -1,12 +1,72 @@
+
+"""
+main.py
+
+Enterprise AI Compliance Assistant
+
+FastAPI backend supporting:
+- Single document upload
+- Multiple document upload
+- Sensitive data detection
+- Risk classification
+- AI compliance reports
+- Single-document RAG
+- Multi-document RAG
+- Persistent SQLite storage
+- Persistent FAISS indexes
+"""
+
+from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import FastAPI, File, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    UploadFile,
+    HTTPException
+)
+
 from fastapi.openapi.utils import get_openapi
+
 from pydantic import BaseModel
 
 from modules.document_manager import DocumentManager
 from modules.qa import DocumentQA
+from modules.storage import DocumentStorage
+
+
+# =========================================================
+# TEMPORARY IN-MEMORY DOCUMENT CACHE
+# =========================================================
+
+document_store = {}
+
+
+# =========================================================
+# APPLICATION LIFESPAN
+# =========================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+
+    # Initialize SQLite and storage directories.
+
+    DocumentStorage.initialize()
+
+    # Restore previously saved documents.
+
+    restored_documents = DocumentStorage.load_documents()
+
+    document_store.update(
+        restored_documents
+    )
+
+    print(
+        f"Restored {len(document_store)} documents from storage."
+    )
+
+    yield
 
 
 # =========================================================
@@ -19,15 +79,9 @@ app = FastAPI(
         "AI-powered sensitive data detection, risk assessment, "
         "compliance, and RAG platform."
     ),
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
-
-
-# =========================================================
-# TEMPORARY DOCUMENT STORE
-# =========================================================
-
-document_store = {}
 
 
 # =========================================================
@@ -36,7 +90,7 @@ document_store = {}
 
 class ChatRequest(BaseModel):
 
-    document_id: str
+    document_ids: list[str]
 
     question: str
 
@@ -56,28 +110,6 @@ def custom_openapi():
         description=app.description,
         routes=app.routes
     )
-
-    # -----------------------------------------------------
-    # Normalize uploaded-file representation for Swagger UI
-    # -----------------------------------------------------
-    #
-    # FastAPI/Pydantic currently generates:
-    #
-    # {
-    #     "type": "string",
-    #     "contentMediaType": "application/octet-stream"
-    # }
-    #
-    # Swagger UI in this environment displays that as a
-    # text field instead of a file selector.
-    #
-    # Convert it to the OpenAPI binary representation:
-    #
-    # {
-    #     "type": "string",
-    #     "format": "binary"
-    # }
-    # -----------------------------------------------------
 
     schemas = openapi_schema.get(
         "components",
@@ -153,6 +185,22 @@ def health_check():
 
 
 # =========================================================
+# LIST PERSISTED DOCUMENTS
+# =========================================================
+
+@app.get("/documents")
+def list_documents():
+
+    documents = DocumentStorage.list_documents()
+
+    return {
+        "status": "success",
+        "total_documents": len(documents),
+        "documents": documents
+    }
+
+
+# =========================================================
 # SINGLE DOCUMENT UPLOAD
 # =========================================================
 
@@ -167,16 +215,27 @@ async def upload_document(
         file
     )
 
-    document_id = str(
-        uuid4()
+    document_id = str(uuid4())
+
+    document["document_id"] = document_id
+
+    # Save document permanently in SQLite.
+
+    DocumentStorage.save_document(
+        document_id,
+        document
     )
+
+    # Keep document available during current execution.
 
     document_store[document_id] = document
 
     return {
+
         "status": "success",
 
         "document": {
+
             "document_id": document_id,
 
             "filename": document["filename"],
@@ -186,7 +245,9 @@ async def upload_document(
             "risk": document["risk"],
 
             "report": document["report"]
+
         }
+
     }
 
 
@@ -204,6 +265,13 @@ async def upload_multiple_documents(
     ]
 ):
 
+    if not files:
+
+        raise HTTPException(
+            status_code=400,
+            detail="At least one document must be uploaded."
+        )
+
     manager = DocumentManager()
 
     documents = []
@@ -214,8 +282,15 @@ async def upload_multiple_documents(
             file
         )
 
-        document_id = str(
-            uuid4()
+        document_id = str(uuid4())
+
+        document["document_id"] = document_id
+
+        # Persist each document separately.
+
+        DocumentStorage.save_document(
+            document_id,
+            document
         )
 
         document_store[document_id] = document
@@ -235,18 +310,18 @@ async def upload_multiple_documents(
         )
 
     return {
+
         "status": "success",
 
-        "total_documents": len(
-            documents
-        ),
+        "total_documents": len(documents),
 
         "documents": documents
+
     }
 
 
 # =========================================================
-# CHAT / RAG
+# CHAT - SINGLE DOCUMENT + MULTI-DOCUMENT RAG
 # =========================================================
 
 @app.post("/chat")
@@ -254,37 +329,146 @@ async def chat(
     request: ChatRequest
 ):
 
-    document = document_store.get(
-        request.document_id
-    )
-
-    if document is None:
-
-        return {
-            "status": "error",
-            "message": "Document not found."
-        }
+    # =====================================================
+    # VALIDATE QUESTION
+    # =====================================================
 
     if not request.question.strip():
 
-        return {
-            "status": "error",
-            "message": "Question cannot be empty."
-        }
+        raise HTTPException(
+            status_code=400,
+            detail="Question cannot be empty."
+        )
 
-    result = DocumentQA.ask(
-        request.question,
-        document
+
+    # =====================================================
+    # VALIDATE DOCUMENT IDS
+    # =====================================================
+
+    if not request.document_ids:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Select at least one document."
+        )
+
+
+    # Remove duplicate IDs while preserving order.
+
+    selected_ids = list(
+        dict.fromkeys(
+            request.document_ids
+        )
     )
 
+    selected_documents = []
+
+    missing_ids = []
+
+    for document_id in selected_ids:
+
+        document = document_store.get(
+            document_id
+        )
+
+        if document is None:
+
+            missing_ids.append(
+                document_id
+            )
+
+        else:
+
+            selected_documents.append(
+                document
+            )
+
+
+    # =====================================================
+    # HANDLE INVALID DOCUMENT IDS
+    # =====================================================
+
+    if missing_ids:
+
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "message": "Some selected documents were not found.",
+                "missing_document_ids": missing_ids
+            }
+        )
+
+
+    # =====================================================
+    # SINGLE-DOCUMENT RAG
+    # =====================================================
+
+    if len(selected_documents) == 1:
+
+        result = DocumentQA.ask(
+            request.question,
+            selected_documents[0]
+        )
+
+        sources = [
+
+            {
+                **source,
+                "document_id": selected_ids[0]
+            }
+
+            for source in result["sources"]
+
+        ]
+
+
+    # =====================================================
+    # MULTI-DOCUMENT RAG
+    # =====================================================
+
+    else:
+
+        result = DocumentQA.ask_multiple(
+            request.question,
+            selected_documents
+        )
+
+        sources = result["sources"]
+
+
+    # =====================================================
+    # PERSIST FAISS INDEXES
+    # =====================================================
+
+    for document_id, document in zip(
+        selected_ids,
+        selected_documents
+    ):
+
+        if document.get("vector_store") is not None:
+
+            DocumentStorage.save_vector_store(
+                document_id,
+                document
+            )
+
+
+    # =====================================================
+    # RETURN RESPONSE
+    # =====================================================
+
     return {
+
         "status": "success",
 
-        "document_id": request.document_id,
+        "document_ids": selected_ids,
+
+        "total_documents": len(selected_documents),
 
         "question": request.question,
 
         "answer": result["answer"],
 
-        "sources": result["sources"]
+        "sources": sources
+
     }
